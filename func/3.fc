@@ -15,11 +15,46 @@
   Documentation on TL-B schemes can be found in https://ton.org/docs/#/overviews/TL-B
 -}
 
+;;; Taken from https://github.com/ton-blockchain/func-contest2-solutions/blob/main/3.fc
+int is_int_msg(cell msg) asm "<{ CTOS 1 LDU SWAP ISZERO 44 THROWIFNOT 3 PUSHINT SDSKIPFIRST LDMSGADDR SWAP REWRITESTDADDR 2DROP LDMSGADDR SWAP REWRITESTDADDR 2DROP LDGRAMS NIP SKIPDICT LDGRAMS NIP LDGRAMS NIP 96 PUSHINT SDSKIPFIRST 1 LDU SWAP <{ 1 LDU SWAP <{ LDREF DROP }>CONT IF }>CONT IF 1 LDU SWAP <{ LDREF DROP }>CONT IF DROP -1 PUSHINT }>CONT <{ DROP 0 PUSHINT }>CONT 1 1 TRYARGS";
+int is_ext_in_msg(cell msg) asm "<{ CTOS 2 LDU SWAP 2 EQINT 44 THROWIFNOT LDMSGADDR SWAP 1 LDU DROP ISZERO 45 THROWIFNOT LDMSGADDR SWAP REWRITESTDADDR 2DROP LDGRAMS NIP 1 LDU SWAP <{ 1 LDU SWAP <{ LDREF DROP }>CONT IF }>CONT IF 1 LDU SWAP <{ LDREF DROP }>CONT IF DROP -1 PUSHINT }>CONT <{ DROP 0 PUSHINT }>CONT 1 1 TRYARGS";
+int is_ext_out_msg(cell msg) asm "<{ CTOS 2 LDU SWAP 3 EQINT 44 THROWIFNOT LDMSGADDR SWAP REWRITESTDADDR 2DROP LDMSGADDR SWAP 1 LDU DROP ISZERO 45 THROWIFNOT 96 PUSHINT SDSKIPFIRST 1 LDU SWAP <{ 1 LDU SWAP <{ LDREF DROP }>CONT IF }>CONT IF 1 LDU SWAP <{ LDREF DROP }>CONT IF DROP -1 PUSHINT }>CONT <{ DROP 0 PUSHINT }>CONT 1 1 TRYARGS";
+slice null_if_addr_none(slice s) asm "DUP b{00} PUSHSLICE SDEQ NULL ROT CONDSEL";
+;;;
+
+(int, tuple) invalid() inline {
+  return (0, null());
+}
+
+(int, tuple) parse_int_msg(cell message) {
+  var cs = message.begin_parse();
+  cs~skip_bits(4);
+  slice src = cs~load_msg_addr();
+  slice dst = cs~load_msg_addr();
+  int amount = cs~load_grams();
+  return (-1, [null_if_addr_none(src), null_if_addr_none(dst), amount]);
+}
+
+(int, tuple) parse_ext_msg(cell message) {
+  var cs = message.begin_parse();
+  cs~skip_bits(2);
+  slice src = cs~load_msg_addr();
+  slice dst = cs~load_msg_addr();
+  return (-1, [null_if_addr_none(src), null_if_addr_none(dst), null()]);
+}
+
 () recv_internal() {
 }
 
 
 ;; testable
 (int, tuple) validate_message(cell message) method_id {
-  return (-1, unsafe_tuple([null(), null(), 0]));
+  if (is_int_msg(message)) {
+    return parse_int_msg(message);
+  }
+  if (is_ext_in_msg(message) | is_ext_out_msg(message)) {
+    return parse_ext_msg(message);
+  }
+
+  return invalid();
 }
