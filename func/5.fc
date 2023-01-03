@@ -8,9 +8,70 @@
  address (without test-only flag), see https://ton.org/docs/#/howto/step-by-step?id=_1-smart-contract-addresses
 -}
 
+;;; Taken from https://github.com/ton-blockchain/func-contest2-solutions/blob/main/5.fc
+(slice) CRC16(slice data) inline_ref {
+  slice new_data = concat_slices(data, two_zero_bytes());
+  int reg = 0;
+  while (~ new_data.slice_data_empty?()) {
+    int byte = new_data~load_uint(8);
+    int mask = 0x80;
+    while (mask > 0) {
+      reg <<= 1;
+      if (byte & mask) {
+        reg += 1;
+      }
+      mask >>= 1;
+      if (reg > 0xffff) {
+        reg &= 0xffff;
+        reg ^= 0x1021;
+      }
+    }
+  }
+  (int q, int r) = divmod(reg, 256);
+  return begin_cell().store_uint(q, 8).store_uint(r, 8).end_cell().begin_parse();
+}
+
+;; BASE64
+;; base64urlchars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+(slice) base64urlchars() asm "x{4142434445464748494A4B4C4D4E4F505152535455565758595A6162636465666768696A6B6C6D6E6F707172737475767778797A303132333435363738392D5F} PUSHSLICE";
+(slice) preload_offset(slice s, int offset, int bits) asm "SDSUBSTR";
+
+(slice) base64encode(slice data) { ;; only for slice_bits / 24 !!!
+  slice chars = base64urlchars();
+  builder res = begin_cell();
+
+  while (data.slice_bits() >= 24) {
+    (int bs1, int bs2, int bs3) = (data~load_uint(8), data~load_uint(8), data~load_uint(8));
+
+    int n = (bs1 << 16) | (bs2 << 8) | bs3;
+
+    res = res.store_slice(chars.preload_offset(((n >> 18) & 63) * 8, 8))
+             .store_slice(chars.preload_offset(((n >> 12) & 63) * 8, 8))
+             .store_slice(chars.preload_offset(((n >>  6) & 63) * 8, 8))
+             .store_slice(chars.preload_offset(((n      ) & 63) * 8, 8));
+  }
+  return res.end_cell().begin_parse();
+}
+;;;
+
+slice to_user_friendly_address_bytes(slice raw_address) {
+  slice unsigned_address = begin_cell()
+      .store_uint(0x11, 8)
+      .store_uint(raw_address~load_uint(8), 8)
+      .store_uint(raw_address~load_uint(256), 256)
+    .end_cell().begin_parse();
+  return begin_cell()
+    .store_slice(unsigned_address)
+    .store_uint(CRC16(unsigned_address), 16)
+    .end_cell().begin_parse();
+}
+
 () recv_internal() {
 }
 
 ;; testable
 (slice) encode_address(slice Address) method_id {
+  ;;;addr_std$10 anycast:(Maybe Anycast) workchain_id:int8 address:bits256  = MsgAddressInt;
+  Address~skip_bits(3);
+  return base64encode(Address.to_user_friendly_address_bytes());
 }
