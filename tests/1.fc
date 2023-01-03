@@ -1,0 +1,15 @@
+int __test_gcd_54_24() { ;; should equal to 6
+  var (int gas_used, stack) = invoke_method(gcd, [54, 24]);
+  [int result] = stack;
+  throw_unless(100, result == 6);
+
+  return gas_used;
+}
+
+int __test_gcd_48_18() { ;; should equal to 6
+  var (int gas_used, stack) = invoke_method(gcd, [48, 18]);
+  [int result] = stack;
+  throw_unless(100, result == 6);
+
+  return gas_used;
+}

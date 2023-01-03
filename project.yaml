@@ -1,0 +1,10 @@
+1:
+  func:
+    - func/1.fc
+  tests:
+    - tests/1.fc
+2:
+  func:
+    - func/2.fc
+  tests:
+    - tests/2.fc
